@@ -59,8 +59,12 @@ flowchart TB
 
 ## Project Status
 
-- **Phase 1 (Implemented & Verified Now):** Host APK (`com.karyon.app`), C++20 `dexe_core` + `axml_parser`, VM `RootfsStore` (ensure/clone/snapshot/restore/delete), Host Capability & Phantom Process Killer probe, `libkaryon_init.so` W^X child supervisor, `AF_UNIX` control & RGBA framebuffer sockets driving `ANativeWindow` `SurfaceView`, TAR RootFS importer & structural verifier, diagnostic/root shell, and APK/DEX inspector.
-- **Phase 2 (Linux / WSL2 Build Required):** Building and shipping the full patched AOSP 14 + GApps + `su` rootfs tarball (`karyon-rootfs-aosp14-arm64.tar`) under [`aosp/`](aosp/README.md).
+- **Phase 1 (Implemented & Verified):** Host APK (`com.karyon.app`, `targetSdk = 35`), C++20 `dexe_core` + `axml_parser`, VM `RootfsStore` (ensure/clone/snapshot/restore/delete), Host Capability Probe (`memfd`, `execmem`, `fileExec`, `init`, Phantom Process checks), `libkaryon_init.so` W^X child supervisor, `AF_UNIX` control & RGBA framebuffer sockets driving `ANativeWindow` `SurfaceView`, TAR RootFS importer with symlink + traversal safety, diagnostic shell, and APK/DEX inspector.
+- **Phase 2A (Implemented & Verified):**
+  - **Zero-WSL2 Prebuilt AOSP 14 Python Extractor** ([`extract_prebuilt_aosp.py`](aosp/scripts/extract_prebuilt_aosp.py)): Reads Android sparse images, GPT disks, `super` dynamic partitions (`liblp`), `ext4` volumes, System-as-Root (`SAR`), and compressed `.apex`/`.capex` payloads directly on Windows into `.tar` / `.tar.gz` (`--profile core` or `--profile full` with GApps & minimal daemon `.rc` pruning).
+  - **`targetSdk = 35` Userspace ELF64 + `PT_INTERP` Loader (`libkaryon_elf_exec.so`):** Maps prebuilt AOSP 14 ELF64 binaries + `linker64` from writable `filesDir` into anonymous `RW -> RX` memory (`execmem`) cleanly without root (`elf-exec system/bin/toybox uname -a` verified on Android 14).
+  - **Consolidated Minimal-Daemon Binder Registry (`binder_broker.cpp`):** Consolidates core OS service handles (`karyon.supervisor`, `karyon.binder`, `karyon.su`, `SurfaceFlinger`, `package`, `activity`, `window`, `input`) inside the supervisor process to stay below Android 12+ child-process limits, paired with a one-tap **Developer Options** shortcut (`Disable child process restrictions`).
+- **Phase 2B (Next):** Preload/`seccomp` `/dev/binder` `ioctl` redirect + rootfs path/UID (`su`) translation + Virtual HAL (`SurfaceFlinger` -> `karyon_fb` socket) to boot full multi-app `system_server` + `ART` + GApps from imported prebuilt AOSP rootfs images.
 
 ---
 

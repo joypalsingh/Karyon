@@ -19,6 +19,7 @@ target_compile_options(dexe_core PRIVATE -Wall -Wextra -fexceptions)
 # Karyon host container supervisor, RootFS store, host capability probe, and JNI bridge
 add_library(karyon_core SHARED
     karyon/axml_parser.cpp
+    karyon/binder_broker.cpp
     karyon/rootfs_store.cpp
     karyon/host_probe.cpp
     karyon/vm_supervisor.cpp
@@ -53,3 +54,19 @@ set_target_properties(karyon_init PROPERTIES
 target_compile_options(karyon_init PRIVATE -Wall -Wextra -fexceptions -fPIE)
 target_link_options(karyon_init PRIVATE -pie)
 target_link_libraries(karyon_init ${log-lib})
+
+# Userspace ELF64 + PT_INTERP (linker64) loader packaged in nativeLibraryDir for targetSdk 35 W^X compliance
+add_executable(karyon_elf_exec
+    karyon/elf_loader.cpp
+    karyon/elf_exec_main.cpp
+)
+set_target_properties(karyon_elf_exec PROPERTIES
+    PREFIX "lib"
+    OUTPUT_NAME "karyon_elf_exec"
+    SUFFIX ".so"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+)
+target_include_directories(karyon_elf_exec PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/karyon)
+target_compile_options(karyon_elf_exec PRIVATE -Wall -Wextra -fexceptions -fPIE)
+target_link_options(karyon_elf_exec PRIVATE -pie)
+target_link_libraries(karyon_elf_exec ${log-lib})

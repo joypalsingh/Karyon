@@ -5,12 +5,15 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipFile
 
 data class TarExtractResult(
     val filesExtracted: Int,
     val dirsCreated: Int,
+    val symlinksCreated: Int,
     val totalBytes: Long
 )
 
@@ -34,7 +37,6 @@ object ContainerArtifacts {
      */
     fun extractTarStream(rawInput: InputStream, targetDir: File): TarExtractResult {
         targetDir.mkdirs()
-        val rootCanonical = targetDir.canonicalPath
         val buffered = BufferedInputStream(rawInput, 65536)
         buffered.mark(2)
         val magic = ByteArray(2)
@@ -51,10 +53,13 @@ object ContainerArtifacts {
             buffered
         }
 
+        val rootPath = targetDir.toPath().toAbsolutePath().normalize()
         val header = ByteArray(512)
         var longNameOverride: String? = null
+        var longLinkOverride: String? = null
         var filesExtracted = 0
         var dirsCreated = 0
+        var symlinksCreated = 0
         var totalBytes = 0L
 
         while (true) {
@@ -64,7 +69,10 @@ object ContainerArtifacts {
             val rawName = readTarCString(header, 0, 100)
             val prefix = readTarCString(header, 345, 155)
             val entryName = longNameOverride ?: if (prefix.isNotEmpty()) "$prefix/$rawName" else rawName
+            val rawLink = readTarCString(header, 157, 100)
+            val linkTarget = longLinkOverride ?: rawLink
             longNameOverride = null
+            longLinkOverride = null
 
             val size = parseTarOctal(header, 124, 12)
             val mode = parseTarOctal(header, 100, 8).toInt()
@@ -76,6 +84,15 @@ object ContainerArtifacts {
                 readFullyExact(stream, nameBytes)
                 skipPadding(stream, size)
                 longNameOverride = String(nameBytes, StandardCharsets.UTF_8).trimEnd('\u0000', '\n')
+                continue
+            }
+
+            if (typeFlag == 'K') {
+                // GNU tar long symlink target metadata block
+                val linkBytes = ByteArray(size.toInt())
+                readFullyExact(stream, linkBytes)
+                skipPadding(stream, size)
+                longLinkOverride = String(linkBytes, StandardCharsets.UTF_8).trimEnd('\u0000', '\n')
                 continue
             }
 
@@ -92,9 +109,18 @@ object ContainerArtifacts {
             if (segments.isNotEmpty() && !hasTraversal) {
                 val cleanRelative = segments.joinToString("/")
                 val destFile = File(targetDir, cleanRelative)
-                val destCanonical = destFile.canonicalPath
-                if (destCanonical != rootCanonical && !destCanonical.startsWith(rootCanonical + File.separator)) {
-                    throw SecurityException("Blocked TAR path traversal: $entryName")
+                val destPath = destFile.toPath().toAbsolutePath().normalize()
+                if (!destPath.startsWith(rootPath)) {
+                    throw SecurityException("Blocked TAR path escape: $entryName")
+                }
+
+                // Ensure no existing ancestor inside targetDir is a symlink we would traverse through
+                var walk = destPath.parent
+                while (walk != null && walk != rootPath) {
+                    if (Files.isSymbolicLink(walk)) {
+                        throw SecurityException("Blocked write through TAR symlink ancestor: $entryName")
+                    }
+                    walk = walk.parent
                 }
 
                 when (typeFlag) {
@@ -102,8 +128,19 @@ object ContainerArtifacts {
                         destFile.mkdirs()
                         dirsCreated++
                     }
+                    '2' -> {
+                        destFile.parentFile?.mkdirs()
+                        Files.deleteIfExists(destPath)
+                        if (linkTarget.isNotEmpty()) {
+                            runCatching {
+                                Files.createSymbolicLink(destPath, Paths.get(linkTarget))
+                                symlinksCreated++
+                            }
+                        }
+                    }
                     '0', '\u0000' -> {
                         destFile.parentFile?.mkdirs()
+                        Files.deleteIfExists(destPath)
                         FileOutputStream(destFile).use { fos ->
                             copyExact(stream, fos, size)
                         }
@@ -131,7 +168,7 @@ object ContainerArtifacts {
             skipPadding(stream, size)
         }
 
-        return TarExtractResult(filesExtracted, dirsCreated, totalBytes)
+        return TarExtractResult(filesExtracted, dirsCreated, symlinksCreated, totalBytes)
     }
 
     fun readApkEntries(apkFile: File): ApkBinaryEntries {

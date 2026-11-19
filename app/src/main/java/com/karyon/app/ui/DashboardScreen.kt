@@ -3,7 +3,9 @@ package com.karyon.app.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -313,24 +315,41 @@ private fun HostCapabilityCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Kernel=${probe.kernelRelease} • memfd=${probe.memfdSupported} • W^X init exec=${probe.initBinaryExecutable} • /dev/kvm=${probe.kvmAccessible}",
+                text = "Kernel=${probe.kernelRelease} • memfd=${probe.memfdSupported} • execmem=${probe.execmemSupported} • fileExec=${probe.fileExecMmapSupported} • init=${probe.initBinaryExecutable}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (probe.phantomProcessKillerRisk) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Android 12+ Phantom Process limit active: disable child-process restriction in Developer Options or copy ADB command for full GMS containers.",
-                        modifier = Modifier.weight(1f),
+                        text = "Android 12+ Phantom Process limit active: enable Settings -> Developer options -> Disable child process restrictions, or copy the Wireless ADB command:",
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.error
                     )
-                    IconButton(onClick = onCopyAdbCommand) {
-                        Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy ADB command")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val ctx = LocalContext.current
+                        OutlinedButton(onClick = {
+                            val devIntent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { ctx.startActivity(devIntent) }.onFailure {
+                                runCatching {
+                                    ctx.startActivity(
+                                        Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            }
+                        }) {
+                            Text("Developer Options", fontSize = 12.sp)
+                        }
+                        OutlinedButton(onClick = onCopyAdbCommand) {
+                            Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy ADB Cmd", fontSize = 12.sp)
+                        }
                     }
                 }
             }

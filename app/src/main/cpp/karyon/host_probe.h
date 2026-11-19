@@ -12,12 +12,14 @@ struct HostCapabilityProbe {
     std::string abi;
     std::string selinux_mode;
     bool memfd_supported = false;
+    bool execmem_supported = false;
+    bool file_exec_mmap_supported = false;
     bool kvm_accessible = false;
     bool init_binary_executable = false;
     bool phantom_process_killer_risk = false;
     std::string init_binary_path;
 };
 
-HostCapabilityProbe probe_host_runtime(const std::string& native_lib_dir, int32_t sdk_int);
+HostCapabilityProbe probe_host_runtime(const std::string& native_lib_dir, const std::string& files_dir, int32_t sdk_int);
 
 }  // namespace karyon::host

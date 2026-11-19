@@ -16,6 +16,8 @@ object KaryonParsers {
             abi = map["abi"].orEmpty(),
             selinuxMode = map["selinux"].orEmpty(),
             memfdSupported = map["memfd"] == "1",
+            execmemSupported = map["execmem"] == "1",
+            fileExecMmapSupported = map["file_exec_mmap"] == "1",
             kvmAccessible = map["kvm"] == "1",
             initBinaryExecutable = map["init_exec"] == "1",
             phantomProcessKillerRisk = map["phantom_risk"] == "1",
@@ -111,7 +113,7 @@ object KaryonNative {
     }
 
     external fun getEngineVersion(): String
-    external fun probeHostRuntime(nativeLibDir: String, sdkInt: Int): String
+    external fun probeHostRuntime(nativeLibDir: String, filesDir: String, sdkInt: Int): String
 
     external fun ensureVmInstance(
         rootDir: String,
@@ -136,6 +138,14 @@ object KaryonNative {
     external fun attachSurface(surface: Surface?)
     external fun detachSurface()
     external fun pollVmStatusAndLogs(): String
+    external fun listConsolidatedServices(): String
+    external fun runGuestElf(
+        elfExecBinaryPath: String,
+        rootDir: String,
+        instanceId: String,
+        guestBinary: String,
+        args: Array<String>
+    ): String
 
     fun parseHostProbe(raw: String): HostCapabilityReport = KaryonParsers.parseHostProbe(raw)
     fun parseRootfsInspection(raw: String): RootfsSummary = KaryonParsers.parseRootfsInspection(raw)

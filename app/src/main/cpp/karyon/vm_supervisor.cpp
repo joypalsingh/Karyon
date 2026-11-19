@@ -1,8 +1,10 @@
 #include "vm_supervisor.h"
+#include "binder_broker.h"
 
 #include <android/log.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -162,6 +164,7 @@ bool VmSupervisor::start_vm(
     child_pid_.store(pid);
     frames_rendered_.store(0);
     running_.store(true);
+    karyon::ipc::global_binder_registry().reset_for_instance(instance_id, pid);
 
     append_log("Supervised child launched: pid=" + std::to_string(pid) + " instance=" + instance_id);
 
@@ -345,6 +348,95 @@ std::vector<std::string> VmSupervisor::drain_logs(size_t max_lines) {
         logs_.pop_front();
     }
     return out;
+}
+
+VmSupervisor::ElfExecOutput VmSupervisor::run_guest_elf(
+    const std::string& elf_exec_binary_path,
+    const std::string& rootfs_dir,
+    const std::string& guest_binary,
+    const std::vector<std::string>& args) {
+    ElfExecOutput res;
+    if (access(elf_exec_binary_path.c_str(), X_OK) != 0) {
+        res.output = "elf_exec helper not executable: " + elf_exec_binary_path;
+        return res;
+    }
+
+    int out_pipe[2] = {-1, -1};
+    if (pipe(out_pipe) != 0) {
+        res.output = "pipe() failed";
+        return res;
+    }
+
+    const size_t slash_pos = elf_exec_binary_path.find_last_of('/');
+    const std::string native_dir = (slash_pos != std::string::npos) ? elf_exec_binary_path.substr(0, slash_pos) : ".";
+
+    std::vector<const char*> c_argv;
+    c_argv.reserve(4 + args.size());
+    c_argv.push_back(elf_exec_binary_path.c_str());
+    c_argv.push_back(rootfs_dir.c_str());
+    c_argv.push_back(guest_binary.c_str());
+    for (const auto& a : args) {
+        c_argv.push_back(a.c_str());
+    }
+    c_argv.push_back(nullptr);
+
+    const pid_t pid = fork();
+    if (pid < 0) {
+        close_if_valid(out_pipe[0]);
+        close_if_valid(out_pipe[1]);
+        res.output = "fork() failed errno=" + std::to_string(errno);
+        return res;
+    }
+
+    if (pid == 0) {
+        close(out_pipe[0]);
+        dup2(out_pipe[1], STDOUT_FILENO);
+        dup2(out_pipe[1], STDERR_FILENO);
+        if (out_pipe[1] > STDERR_FILENO) close(out_pipe[1]);
+        setenv("LD_LIBRARY_PATH", native_dir.c_str(), 1);
+        execv(elf_exec_binary_path.c_str(), const_cast<char* const*>(c_argv.data()));
+        _exit(127);
+    }
+
+    close(out_pipe[1]);
+    struct pollfd pfd { out_pipe[0], POLLIN, 0 };
+    char buf[1024];
+    int elapsed_ms = 0;
+    while (elapsed_ms < 5000) {
+        const int pr = poll(&pfd, 1, 200);
+        if (pr > 0 && (pfd.revents & POLLIN)) {
+            const ssize_t n = read(out_pipe[0], buf, sizeof(buf));
+            if (n <= 0) break;
+            if (res.output.size() < 16384) {
+                res.output.append(buf, static_cast<size_t>(n));
+            }
+        } else if (pr > 0 && (pfd.revents & (POLLHUP | POLLERR))) {
+            const ssize_t n = read(out_pipe[0], buf, sizeof(buf));
+            if (n > 0 && res.output.size() < 16384) {
+                res.output.append(buf, static_cast<size_t>(n));
+            }
+            break;
+        } else {
+            elapsed_ms += 200;
+            int st = 0;
+            if (waitpid(pid, &st, WNOHANG) == pid) {
+                res.exit_code = WIFEXITED(st) ? WEXITSTATUS(st) : -WTERMSIG(st);
+                break;
+            }
+        }
+    }
+    close_if_valid(out_pipe[0]);
+
+    int st = 0;
+    if (waitpid(pid, &st, WNOHANG) == 0) {
+        kill(pid, SIGKILL);
+        waitpid(pid, &st, 0);
+        res.output += "\n[timeout after 5s]";
+    } else if (res.exit_code == -1) {
+        waitpid(pid, &st, 0);
+        res.exit_code = WIFEXITED(st) ? WEXITSTATUS(st) : (WIFSIGNALED(st) ? -WTERMSIG(st) : -1);
+    }
+    return res;
 }
 
 }  // namespace karyon::supervisor

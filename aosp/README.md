@@ -1,12 +1,27 @@
 # Karyon AOSP 14 RootFS Pipeline
 
-This directory tracks the manifest, overlay configuration, and packaging scripts for building Karyon's **bootable AOSP 14 userland rootfs** (`karyon-rootfs-aosp14-arm64.tar`).
+Karyon supports **two** ways to produce an AOSP 14 rootfs `.tar`/`.tar.gz` bundle importable by `Karyon.apk`:
 
-## Why Linux / WSL2 Is Required
+## Option 1: Prebuilt AOSP 14 Extraction (Pure Python, No Linux/WSL2 Needed)
 
-AOSP's Soong build system (`lunch`, `m`, Bionic, `SurfaceFlinger`, `libbinder`, `ART`) only compiles on **64-bit Linux** (Ubuntu 22.04/24.04 or WSL2 with case-sensitive ext4 filesystem and ~150+ GB free disk space). Windows bare-metal builds cannot compile a full AOSP OS image.
+Use [`aosp/scripts/extract_prebuilt_aosp.py`](scripts/extract_prebuilt_aosp.py) directly on Windows/macOS/Linux to extract official prebuilt Android 14 GSI or SDK images (`system.img` containing `GPT`, dynamic `super` / `liblp`, `ext4`, `.apex`/`.capex`, and GApps under `product/priv-app/`):
 
-> Note: While `Dexe` (`Dexe-main/android-platform.json`) pins AOSP 14 commits for Java framework + Windows library inspection, it does not compile Android `init`, `zygote`, `libart.so`, or `SurfaceFlinger` daemons for ARM64 Linux. Karyon uses `android-platform.json` only as a pinned source reference while full rootfs images come from a Linux AOSP build.
+```powershell
+# Inspect partitions, sizes, GApps/Play Store presence, and init binaries
+python aosp\scripts\extract_prebuilt_aosp.py path\to\system.img --inspect
+
+# Pack lightweight core userland (bin, lib64, framework, flattened ART/Runtime APEXes)
+python aosp\scripts\extract_prebuilt_aosp.py path\to\system.img --profile core --out karyon-aosp14-core.tar.gz
+
+# Pack full AOSP + product/GApps + minimal hardware-daemon pruning
+python aosp\scripts\extract_prebuilt_aosp.py path\to\system.img --profile full --out karyon-aosp14-full.tar.gz
+```
+
+## Option 2: Building AOSP 14 from Source (Linux / WSL2 Required)
+
+If building customized AOSP components from source (`soong` / `m`), AOSP requires 64-bit Linux (Ubuntu 22.04 or WSL2 with `ext4` + ~150+ GB disk space and swap).
+
+> Note: While `Dexe` (`Dexe-main/android-platform.json`) pins AOSP 14 commits for Java framework + Windows library inspection, it does not compile Android `init`, `zygote`, `libart.so`, or `SurfaceFlinger` daemons for ARM64 Linux.
 
 ## Target Patches Required for Rootless Container Execution
 

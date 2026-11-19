@@ -195,9 +195,15 @@ RootfsInspection RootfsStore::inspect_instance(const std::string& instance_id) c
     out.has_container_su = !resolve_first("system/xbin/su").empty() || !resolve_first("system/bin/su").empty();
 
     out.has_gapps_gms = contains_any_case_insensitive(rfs / "system" / "priv-app", {"gmscore", "prebuiltgms"}) ||
-                        contains_any_case_insensitive(ovl / "system" / "priv-app", {"gmscore", "prebuiltgms"});
+                        contains_any_case_insensitive(rfs / "product" / "priv-app", {"gmscore", "prebuiltgms"}) ||
+                        contains_any_case_insensitive(rfs / "system_ext" / "priv-app", {"gmscore", "prebuiltgms"}) ||
+                        contains_any_case_insensitive(ovl / "system" / "priv-app", {"gmscore", "prebuiltgms"}) ||
+                        contains_any_case_insensitive(ovl / "product" / "priv-app", {"gmscore", "prebuiltgms"});
     out.has_gapps_play_store = contains_any_case_insensitive(rfs / "system" / "priv-app", {"phonesky"}) ||
-                               contains_any_case_insensitive(ovl / "system" / "priv-app", {"phonesky"});
+                               contains_any_case_insensitive(rfs / "product" / "priv-app", {"phonesky"}) ||
+                               contains_any_case_insensitive(rfs / "system_ext" / "priv-app", {"phonesky"}) ||
+                               contains_any_case_insensitive(ovl / "system" / "priv-app", {"phonesky"}) ||
+                               contains_any_case_insensitive(ovl / "product" / "priv-app", {"phonesky"});
 
     out.is_bootable_aosp = out.has_init_binary && out.has_services_jar && out.has_framework_jar;
 

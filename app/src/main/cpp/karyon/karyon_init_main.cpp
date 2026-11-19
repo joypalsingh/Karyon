@@ -196,7 +196,10 @@ int main(int argc, char** argv) {
     const bool has_init = has_file(rfs, "system/bin/init") || has_file(ovl, "system/bin/init");
     const bool has_services = has_file(rfs, "system/framework/services.jar") || has_file(ovl, "system/framework/services.jar");
     const bool has_gms = has_named_entry(rfs / "system/priv-app", "gmscore", "prebuiltgms") ||
-                         has_named_entry(ovl / "system/priv-app", "gmscore", "prebuiltgms");
+                         has_named_entry(rfs / "product/priv-app", "gmscore", "prebuiltgms") ||
+                         has_named_entry(rfs / "system_ext/priv-app", "gmscore", "prebuiltgms") ||
+                         has_named_entry(ovl / "system/priv-app", "gmscore", "prebuiltgms") ||
+                         has_named_entry(ovl / "product/priv-app", "gmscore", "prebuiltgms");
     const bool has_su = has_file(rfs, "system/xbin/su") || has_file(ovl, "system/xbin/su");
 
     std::printf("KARYON_INIT: started pid=%d uid=%d instance=%s\n", getpid(), getuid(), instance_id.c_str());

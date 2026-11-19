@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -41,6 +44,7 @@ import androidx.compose.material3.Surface as ComposeSurface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -231,7 +236,20 @@ fun ViewportScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                         if (activeDrawer == ViewportDrawer.SHELL) {
+                            val shellListState = rememberLazyListState()
+                            LaunchedEffect(shellHistory.size) {
+                                if (shellHistory.isNotEmpty()) {
+                                    shellListState.animateScrollToItem(shellHistory.lastIndex)
+                                }
+                            }
+                            val submitCmd = {
+                                if (commandInput.isNotBlank()) {
+                                    onRunShellCommand(commandInput)
+                                    commandInput = ""
+                                }
+                            }
                             LazyColumn(
+                                state = shellListState,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
@@ -257,14 +275,13 @@ fun ViewportScreen(
                                 OutlinedTextField(
                                     value = commandInput,
                                     onValueChange = { commandInput = it },
-                                    placeholder = { Text("help, rootfs, ls, uname, id...") },
+                                    placeholder = { Text("help, services, elf-exec system/bin/toybox uname -a") },
                                     singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    keyboardActions = KeyboardActions(onSend = { submitCmd() }),
                                     modifier = Modifier.weight(1f)
                                 )
-                                IconButton(onClick = {
-                                    onRunShellCommand(commandInput)
-                                    commandInput = ""
-                                }) {
+                                IconButton(onClick = submitCmd) {
                                     Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Run")
                                 }
                             }

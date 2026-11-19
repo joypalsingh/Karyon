@@ -14,6 +14,8 @@ data class HostCapabilityReport(
     val abi: String = "",
     val selinuxMode: String = "",
     val memfdSupported: Boolean = false,
+    val execmemSupported: Boolean = false,
+    val fileExecMmapSupported: Boolean = false,
     val kvmAccessible: Boolean = false,
     val initBinaryExecutable: Boolean = false,
     val phantomProcessKillerRisk: Boolean = false,

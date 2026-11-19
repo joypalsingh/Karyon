@@ -64,7 +64,7 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
         listOf(
             ShellLine(
                 isCommand = false,
-                text = "Karyon Container Shell ready. Commands: help, uname, id, rootfs, ls [path], cat <path>, env"
+                text = "Karyon Container Shell ready. Commands: help, services, elf-exec <bin> [args], rootfs, ls [path], cat <path>"
             )
         )
     )
@@ -90,6 +90,7 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
                 _engineVersion.value = KaryonNative.getEngineVersion()
                 val probeRaw = KaryonNative.probeHostRuntime(
                     appContext.applicationInfo.nativeLibraryDir.orEmpty(),
+                    rootDirPath,
                     Build.VERSION.SDK_INT
                 )
                 _hostProbe.value = KaryonNative.parseHostProbe(probeRaw)
@@ -317,7 +318,7 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
             refreshVfsEntries()
             _statusBanner.value = outcome.fold(
                 onSuccess = { r ->
-                    "Imported ${r.filesExtracted} files (${r.totalBytes / 1024} KB). Verified RootFS flags updated."
+                    "Imported ${r.filesExtracted} files, ${r.symlinksCreated} links (${r.totalBytes / 1024} KB)."
                 },
                 onFailure = { e ->
                     "RootFS import failed: ${e.message ?: "invalid TAR/TAR.GZ archive"}"
@@ -433,7 +434,14 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
         val overlayDir = File(instanceDir, "overlay")
         val tokens = cmd.split(Regex("\\s+"))
         return when (tokens.firstOrNull()) {
-            "help" -> "Commands: help, uname, id, rootfs, ls [rel], cat <rel>, env, ping"
+            "help" -> "Commands: help, services, elf-exec <bin> [args...], rootfs, ls [rel], cat <rel>, uname, id, env, ping"
+            "services" -> KaryonNative.listConsolidatedServices().trimEnd()
+            "elf-exec" -> {
+                val guestBin = tokens.getOrNull(1) ?: return "Usage: elf-exec <rootfs_rel_bin> [args...]"
+                val args = if (tokens.size > 2) tokens.drop(2).toTypedArray() else emptyArray()
+                val elfExecPath = File(appContext.applicationInfo.nativeLibraryDir, "libkaryon_elf_exec.so").absolutePath
+                KaryonNative.runGuestElf(elfExecPath, rootDirPath, vm.id, guestBin, args).trimEnd()
+            }
             "ping" -> {
                 val ok = KaryonNative.sendVmCommand("PING")
                 if (ok) "Sent PING to child pid=${_runtimeStatus.value.childPid}" else "Child supervisor not running"

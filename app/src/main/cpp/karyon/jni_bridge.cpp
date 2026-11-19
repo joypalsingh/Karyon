@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "axml_parser.h"
+#include "binder_broker.h"
 #include "dex/dex_file.h"
 #include "dex/disassembler.h"
 #include "host_probe.h"
@@ -51,8 +52,12 @@ Java_com_karyon_app_nativebridge_KaryonNative_probeHostRuntime(
     JNIEnv* env,
     jobject,
     jstring native_lib_dir,
+    jstring files_dir,
     jint sdk_int) {
-    const auto probe = karyon::host::probe_host_runtime(jstr_to_std(env, native_lib_dir), static_cast<int32_t>(sdk_int));
+    const auto probe = karyon::host::probe_host_runtime(
+        jstr_to_std(env, native_lib_dir),
+        jstr_to_std(env, files_dir),
+        static_cast<int32_t>(sdk_int));
     std::ostringstream ss;
     ss << "uid=" << probe.host_uid << "\n"
        << "sdk=" << probe.host_sdk_int << "\n"
@@ -60,6 +65,8 @@ Java_com_karyon_app_nativebridge_KaryonNative_probeHostRuntime(
        << "abi=" << escape_kv(probe.abi) << "\n"
        << "selinux=" << escape_kv(probe.selinux_mode) << "\n"
        << "memfd=" << (probe.memfd_supported ? 1 : 0) << "\n"
+       << "execmem=" << (probe.execmem_supported ? 1 : 0) << "\n"
+       << "file_exec_mmap=" << (probe.file_exec_mmap_supported ? 1 : 0) << "\n"
        << "kvm=" << (probe.kvm_accessible ? 1 : 0) << "\n"
        << "init_exec=" << (probe.init_binary_executable ? 1 : 0) << "\n"
        << "phantom_risk=" << (probe.phantom_process_killer_risk ? 1 : 0) << "\n"
@@ -259,5 +266,51 @@ Java_com_karyon_app_nativebridge_KaryonNative_pollVmStatusAndLogs(JNIEnv* env, j
     for (const auto& l : logs) {
         ss << "log=" << escape_kv(l) << "\n";
     }
+    return env->NewStringUTF(ss.str().c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_karyon_app_nativebridge_KaryonNative_listConsolidatedServices(JNIEnv* env, jobject) {
+    const auto services = karyon::ipc::global_binder_registry().list_services();
+    std::ostringstream ss;
+    ss << "instance=" << karyon::ipc::global_binder_registry().active_instance()
+       << " count=" << services.size() << "\n";
+    for (const auto& s : services) {
+        ss << "[" << s.handle << "] " << s.name
+           << " (" << s.descriptor << ") pid=" << s.owner_pid
+           << " tx=" << s.tx_count
+           << (s.in_process_consolidated ? " [consolidated]" : "") << "\n";
+    }
+    return env->NewStringUTF(ss.str().c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_karyon_app_nativebridge_KaryonNative_runGuestElf(
+    JNIEnv* env,
+    jobject,
+    jstring elf_exec_binary_path,
+    jstring root_dir,
+    jstring instance_id,
+    jstring guest_binary,
+    jobjectArray args_arr) {
+    karyon::storage::RootfsStore store(jstr_to_std(env, root_dir));
+    const std::string id = jstr_to_std(env, instance_id);
+    std::vector<std::string> args;
+    if (args_arr) {
+        const jsize n = env->GetArrayLength(args_arr);
+        args.reserve(static_cast<size_t>(n));
+        for (jsize i = 0; i < n; ++i) {
+            auto jarg = static_cast<jstring>(env->GetObjectArrayElement(args_arr, i));
+            args.push_back(jstr_to_std(env, jarg));
+            if (jarg) env->DeleteLocalRef(jarg);
+        }
+    }
+    const auto out = karyon::supervisor::global_supervisor().run_guest_elf(
+        jstr_to_std(env, elf_exec_binary_path),
+        store.rootfs_dir(id),
+        jstr_to_std(env, guest_binary),
+        args);
+    std::ostringstream ss;
+    ss << "exit=" << out.exit_code << "\n" << out.output;
     return env->NewStringUTF(ss.str().c_str());
 }

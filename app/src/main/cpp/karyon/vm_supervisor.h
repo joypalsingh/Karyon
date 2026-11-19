@@ -39,6 +39,16 @@ public:
     VmRuntimeStatus status() const;
     std::vector<std::string> drain_logs(size_t max_lines = 100);
 
+    struct ElfExecOutput {
+        int32_t exit_code = -1;
+        std::string output;
+    };
+    ElfExecOutput run_guest_elf(
+        const std::string& elf_exec_binary_path,
+        const std::string& rootfs_dir,
+        const std::string& guest_binary,
+        const std::vector<std::string>& args);
+
 private:
     void append_log(const std::string& line);
     void present_rgba_frame(uint32_t w, uint32_t h, const std::vector<uint8_t>& rgba);

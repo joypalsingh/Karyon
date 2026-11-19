@@ -17,6 +17,8 @@ class KaryonNativeParseTest {
             abi=arm64-v8a
             selinux=enforcing
             memfd=1
+            execmem=1
+            file_exec_mmap=0
             kvm=0
             init_exec=1
             phantom_risk=1
@@ -27,6 +29,8 @@ class KaryonNativeParseTest {
         assertEquals(34, parsed.hostSdkInt)
         assertEquals("arm64-v8a", parsed.abi)
         assertTrue(parsed.memfdSupported)
+        assertTrue(parsed.execmemSupported)
+        assertFalse(parsed.fileExecMmapSupported)
         assertFalse(parsed.kvmAccessible)
         assertTrue(parsed.initBinaryExecutable)
         assertTrue(parsed.phantomProcessKillerRisk)
