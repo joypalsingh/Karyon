@@ -1,0 +1,31 @@
+# Gradle / Android
+.gradle/
+build/
+*/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# NDK / CMake
+.cxx/
+*/.cxx/
+
+# Large AOSP RootFS / VM Artifacts
+aosp/src/
+aosp/out/
+*.tar
+*.tar.gz
+*.tar.zst
+*.img
+*.qcow2
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <!-- Karyon AOSP 14 Container Overlay Manifest (Reference for repo local_manifests) -->
+  <!-- Base branch target: android-14.0.0_r75 (API 34) -->
+
+  <!-- Required userland components packed into karyon-rootfs-aosp14-arm64.tar:
+       - system/bin/init, servicemanager, app_process64, surfaceflinger, installd, sh
+       - system/framework/framework.jar, services.jar, framework-res.apk
+       - apex/com.android.art, com.android.i18n, com.android.runtime
+       - vendor/lib64/hw/hwcomposer.karyon.so, gralloc.karyon.so
+       - system/priv-app/{PrebuiltGmsCore,Phonesky,GoogleServicesFramework}
+       - system/xbin/su (container-scoped root helper)
+  -->
+</manifest>
