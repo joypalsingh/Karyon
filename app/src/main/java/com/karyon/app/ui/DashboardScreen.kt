@@ -75,11 +75,13 @@ fun DashboardScreen(
     instances: List<VmInstance>,
     selectedVmId: String?,
     runtimeStatus: VmRuntimeStatus,
+    bundledRootfsAsset: String? = null,
     onSelectVm: (String) -> Unit,
     onCreateVm: (name: String, targetApi: Int, gapps: Boolean, su: Boolean) -> Unit,
     onBootVm: (VmInstance) -> Unit,
     onStopVm: () -> Unit,
     onImportRootfs: (String, Uri) -> Unit,
+    onInstallBundledRootfs: (String) -> Unit = {},
     onCloneVm: (VmInstance) -> Unit,
     onSnapshotVm: (VmInstance) -> Unit,
     onRestoreSnapshot: (VmInstance) -> Unit,
@@ -253,6 +255,12 @@ fun DashboardScreen(
                             Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Import RootFS")
+                        }
+
+                        if (bundledRootfsAsset != null && !summary.isBootableAosp) {
+                            OutlinedButton(onClick = { onInstallBundledRootfs(vm.id) }) {
+                                Text("Use Bundled")
+                            }
                         }
 
                         IconButton(onClick = { onSnapshotVm(vm) }) {

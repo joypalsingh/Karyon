@@ -12,9 +12,12 @@ local.properties
 .cxx/
 */.cxx/
 
-# Large AOSP RootFS / VM Artifacts
+# Large AOSP RootFS / VM Artifacts (keep APK-bundled tarballs local; GitHub blocks >100 MB files)
 aosp/src/
 aosp/out/
+app/src/main/assets/rootfs/*.tar
+app/src/main/assets/rootfs/*.tar.gz
+app/src/main/assets/rootfs/*.tgz
 *.tar
 *.tar.gz
 *.tar.zst

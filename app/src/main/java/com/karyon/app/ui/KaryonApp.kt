@@ -50,6 +50,7 @@ fun KaryonApp(vm: KaryonViewModel = viewModel()) {
     val hostApps by vm.hostApps.collectAsState()
     val inspectedApk by vm.inspectedApk.collectAsState()
     val vfsEntries by vm.vfsEntries.collectAsState()
+    val bundledRootfsAsset by vm.bundledRootfsAsset.collectAsState()
 
     val selectedVm = instances.firstOrNull { it.id == selectedVmId } ?: instances.firstOrNull()
 
@@ -109,6 +110,7 @@ fun KaryonApp(vm: KaryonViewModel = viewModel()) {
                     instances = instances,
                     selectedVmId = selectedVm?.id,
                     runtimeStatus = runtimeStatus,
+                    bundledRootfsAsset = bundledRootfsAsset,
                     onSelectVm = vm::selectVm,
                     onCreateVm = vm::createVm,
                     onBootVm = { instance ->
@@ -118,6 +120,7 @@ fun KaryonApp(vm: KaryonViewModel = viewModel()) {
                     },
                     onStopVm = vm::stopVm,
                     onImportRootfs = vm::importRootfsArchive,
+                    onInstallBundledRootfs = { vmId -> vm.installBundledRootfs(vmId) },
                     onCloneVm = vm::cloneVm,
                     onSnapshotVm = vm::snapshotVm,
                     onRestoreSnapshot = vm::restoreLatestSnapshot,

@@ -82,7 +82,11 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
     private val _vfsEntries = MutableStateFlow<List<VfsEntryItem>>(emptyList())
     val vfsEntries: StateFlow<List<VfsEntryItem>> = _vfsEntries.asStateFlow()
 
+    private val _bundledRootfsAsset = MutableStateFlow<String?>(null)
+    val bundledRootfsAsset: StateFlow<String?> = _bundledRootfsAsset.asStateFlow()
+
     private var pollJob: Job? = null
+    private var provisionJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -93,12 +97,28 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
                     rootDirPath,
                     Build.VERSION.SDK_INT
                 )
-                _hostProbe.value = KaryonNative.parseHostProbe(probeRaw)
+                val probe = KaryonNative.parseHostProbe(probeRaw)
+                _hostProbe.value = probe
+                _bundledRootfsAsset.value = findBundledRootfsAsset(probe.abi)
                 loadOrSeedInstances()
                 loadInstalledHostApps()
             }
             refreshVfsEntries()
+            val primary = _instances.value.firstOrNull { it.id == "aosp14_primary" }
+            val assetName = _bundledRootfsAsset.value
+            if (primary != null && !primary.rootfsSummary.isBootableAosp && assetName != null) {
+                installBundledRootfs(primary.id, assetName)
+            }
         }
+    }
+
+    private fun findBundledRootfsAsset(hostAbi: String): String? {
+        val list = runCatching { appContext.assets.list("rootfs")?.toList().orEmpty() }.getOrDefault(emptyList())
+        if (list.isEmpty()) return null
+        val tars = list.filter { it.endsWith(".tar") || it.endsWith(".tar.gz") || it.endsWith(".tgz") }
+        val normalizedAbi = hostAbi.lowercase()
+        return tars.firstOrNull { it.lowercase().contains(normalizedAbi) }
+            ?: if (normalizedAbi.contains("arm64")) tars.firstOrNull { it.lowercase().contains("arm64") } else null
     }
 
     private fun metadataFile(): File {
@@ -327,8 +347,37 @@ class KaryonViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun installBundledRootfs(vmId: String, assetOverride: String? = null) {
+        val assetName = assetOverride ?: _bundledRootfsAsset.value ?: run {
+            _statusBanner.value = "No bundled RootFS matching ABI ${_hostProbe.value.abi}"
+            return
+        }
+        provisionJob = viewModelScope.launch {
+            _statusBanner.value = "Extracting bundled RootFS ($assetName)..."
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    val rootfsDir = File(rootDirPath, "karyon_v1/instances/$vmId/rootfs")
+                    appContext.assets.open("rootfs/$assetName").use { stream ->
+                        ContainerArtifacts.extractTarStream(stream, rootfsDir)
+                    }
+                }
+            }
+            refreshInstanceSummary(vmId)
+            refreshVfsEntries()
+            _statusBanner.value = outcome.fold(
+                onSuccess = { r ->
+                    "Bundled RootFS ready: ${r.filesExtracted} files, ${r.symlinksCreated} links (${r.totalBytes / 1024} KB)."
+                },
+                onFailure = { e ->
+                    "Bundled RootFS failed: ${e.message ?: "invalid asset archive"}"
+                }
+            )
+        }
+    }
+
     fun bootVm(vm: VmInstance, onReadyNavigateViewport: () -> Unit) {
         viewModelScope.launch {
+            provisionJob?.join()
             _selectedVmId.value = vm.id
             _lifecycleState.value = VmLifecycleState.BOOTING_SUPERVISOR
             val initPath = _hostProbe.value.initBinaryPath.ifBlank {
